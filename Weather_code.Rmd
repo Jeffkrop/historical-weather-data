@@ -5,7 +5,7 @@ output: html_notebook
 
 Below is code that will allow the user to feed in a list of locations they would like retrieve weather data for. The code below will find the 3 weather stations that are nearest the locations given. The three stations will be in 3 different quadrants. I wanted different quadrants because I did not want groups stations I want to get a better understanding of the weather around a location. 
 
-The finished list will return 
+The finished list will return a data frame
 ```{r}
 #Packages need for this code. 
 

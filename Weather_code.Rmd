@@ -1,0 +1,282 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Below is code that will allow the user to feed in a list of locations they would like retrieve weather data for. The code below will find the 3 weather stations that are nearest the locations given. The three stations will be in 3 different quadrants. I wanted different quadrants because I did not want groups stations I want to get a better understanding of the weather around a location. 
+
+The finished list will return 
+```{r}
+#Packages need for this code. 
+
+library(tidyverse)
+#library(sp) # for plotting data as maps
+#library(knitr) #dynamic report generation
+library(parallel) #Working with multiple cores on cpu
+#library(ggmap) #Visualize spatial data
+library(lubridate) #Work with dates
+#library(gstat) #Spatial Geostatistical Modelling, Prediction and Simulation
+#library(FedData) #Used to get ssurgo data
+#library(rgdal) #Used to read in shapefiles
+#library(maptools) #Used to save the shapefile to disk
+#library(RCurl) #Used to get url.
+```   
+   
+      
+```{r}
+
+#Add a file path that has a list of locations with a name, latitude and longitude for each. 
+test_stations <- "/Users/jeffkropelnicki/Desktop/Winfield files/weather requests/weather for john/Jeff_Only1recrodperAnswer.csv"
+
+#Add the year you would like weather data for. 
+year <- "2017"
+
+#This reads in the data and names it locations. 
+locations <- read.csv(test_stations, stringsAsFactors = FALSE) %>%
+  mutate(loc_index=row_number())
+
+
+#This is the URL to NOAA's FTP site that has a list of all weather stations this is used to find the stations that are nearest to your location and then get the weather data for only that site. 
+file <- "ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.csv"
+
+repeat{
+  try(download.file(file, "isd-history.csv", quiet = TRUE))
+  if (file.info("isd-history.csv")$size > 0) {
+    break
+  }
+}
+
+#Create data frame of weather stations that are in the United States and were in operation between the years 2014 and 2017
+stations <- read.csv("isd-history.csv") %>%
+  filter(CTRY=="US") %>%
+  filter(BEGIN <= 20140101 & END >=20171201) %>%
+  mutate(st_index=row_number()) %>%
+  arrange(STATION.NAME)
+
+
+#One downfall to NOAA weather stations is that they do not always have the data you need for the years that you are looking for. So you need to find a way to remove them from the stations that get entered a stations near your locations. Below is a large number of stations that get removed for the stations dataframe created above. 
+
+#The below list has been made over time as I pull data for different locations but most of my work is for the years 2016 and 2017 in the midwest so there could/will be locations that are not on this list that will not return the amount of data you need or have precipitation data for the number of days you would like.
+
+#Remove stations that do not return enough days 
+low_days <- c("PUTNAM CO", "MARION MUNICIPAL AP", "MARCUS HOOK", "LOUISIANA REGIONAL AIRPORT", "JIMMY CARTER REGIONAL AIRPORT", "ELK CITY MUNI", "BLACKWELL TONKAWA MUNI", "AIKEN MUNICIPAL AIRPORT", "LOGANSPORT CASS CO", "GRIFFIN SPALDING CO", "CLEVELAND MUNI", "THOMASVILLE RGNL", "THOMAS P STAFFORD", "BUOY 44057 / SUSQUEHANNA", "HEART OF GEORGIA REGIONAL AIRPORT", "GWINNETT CO-BRISCOE FD APT", "BARNWELL CO", "INDIANAPOLIS EXECUTIVE AIRPORT", "INDIANAPOLIS EXECUTIVE AIRPORT", "LEWISETTA VA", "BARNWELL REGIONAL AIRPORT", "HAZLEHURST AIRPORT", "LOWCOUNTRY REGIONAL AIRPORT", "PLANTATION AIRPARK", "SUMMERVILLE", "MULTI PURPOSE RANGE", "JESUP WAYNE COUNTY AIRPORT", "MAURY COUNTY AIRPORT", "WINCHESTER MUNICIPAL AIRPORT", "UPPER CUMBERLAND RGNL", "CLAXTON EVANS CO", "CAMBRIDGE MD", "FALSE RIVER REGIONAL AIRPORT", "NEWPORT MUNI", "WEST GEORGIA REGIONAL AIRPORT O V GRAY FIELD", "BRANDYWINE SHOAL LGT", "ANRSN MUNI DRNGTON FLD AP", "BUOY 44056 / DUCK FRF", "OLIVE BRANCH AIRPORT", "ARKANSAS INTERNATIONAL AIRPORT", "KITTY HAWK ONE HELIPORT", "KNOX/STARKE CO", "BUOY 44100 / DUCK FRF 26M", "FIRST FLIGHT AIRPORT", "BELLEFONTAINE REGIONAL AIRPORT", "BUOY 44099 / CAPE HENRY", "JACKSON CO", "PAMPA MESA VISTA AIRPORT", "PINEY POINT", "RAPPAHANNOCK LGT", "SUMTER", "BROOKHAVEN LINCOLN CO", "NORTH LITTLE ROCK AIRPORT", "PINEY ISLAND", "SEWELLS POINT VA", "USMC BOMB RANGE BT-11", "LAKE MARION", "CHESTERFIELD AIRPORT", "POSEY FIELD AIRPORT", "EAST GEORGIA REGIONAL AIRPORT", "CHRIS CRUSTA MEMORIAL AIRPORT / ABBEVILLE", "INDEPENDENCE MUNICIPAL AIRPORT", "NEWBERRY COUNTY AIRPORT", "SANTEE COOPER RGNL", "ALGOMA CITY MARINA", "BARNES COUNTY MUNICIPAL AIRPORT", "CARRINGTON MUNI", "CARRINGTON MUNICIPAL AIRPORT", "FOREST CITY MUNI", "PORTAGE COUNTY AIRPORT", "FULTON COUNTY AIRPORT", "CUMERLAND MUNICIPAL AIRPORT", "PAYNESVILLE MUNI", "INDIANAPOLIS EXECUTIVE", "LINTON MUNICIPAL AIRPORT", "MARION MUNI", "DYERSBURG MUNICIPAL ARPT", "LINTON MUNI", "KILO (HARLOWTOWN)", "HUTSON FIELD AIRPORT", "WILLMAR MUNI", "MIKE (MOORE)", "HOLYOKE", "NOVEMBER (GRASS RANGE)", "HUTSON FLD", "ALGONA MUNICIPAL AIRPORT", "ALGONA MUNICIPAL AIRPORT", "ANKENY REGIONAL AIRPORT", "FERGUS FALLS MUNICIPAL AIRPORT-EINAR MICKELSON F", "FERGUS FALLS MUNICIPAL AIRPORT-EINAR MICKELSON", "JACKSON MUNICIPAL AIRPORT") 
+
+low_days_1 <- c("STUART POWELL FIELD AIRPORT", "OHIO UNIVERSITY SNYDER FLD", "CHEYENNE CO MUNI", "DELAWARE BAY 26 NM SOUTHEAST OF CAPE MAY", "STEVENSVILLE", "OKLAHOMA CITY/PAGE", "DELAWARE MUNI", "CLINTON MUNI", "HALIFAX-NORTHAMPTON REGIONAL", "MINDEN-WEBSTER AIRPORT", "BROOKHAVEN LINCOLN COUNTY AIRPORT", "SHELL AHP", "JOHN BELL WILLIAMS AIRPORT", "W ERIE 28NM NORTHWEST OF CLEVELAND OH", "HURON LIGHT", "BUOY 44063 / ANNAPOLIS", "MASON COUNTY AIRPORT", "STROM THURMOND DAM", "MICHIGAN CITY MUNICIPAL AIRPORT PHILLIPS FIELD", "BAY BRIDGE AIRPORT", "KNOX COUNTY AIRPORT", "WOODWARD FIELD AIRPORT", "SKYHAVEN AIRPORT", "WARRENSBURG", "CAMDEN/WOODWARD FLD", "EL RENO REGIONAL AIRPORT", "KNOX COUNTY", "BERKELEY COUNTY AIRPORT", "KINGSTREE/WILLIAMSBURG RGNL", "COATESVILLE/CARLSON AIRPORT", "LAURENS", "CAPE CHARLES", "WILLIAM R POUGE MUNICIPAL AIRPORT", "MICHIGAN CITY", "MICHIGAN CITY MUNICIPAL AIRPORT", "BELLEFONTAINE REGIONAL AIRPORT", "BUOY 44100 / DUCK FRF 26M", "KIPTOPEKE", "WAVERIDER BUOY", "BEAUFORT COUNTY AIRPORT", "MADISON MUNICIPAL AIRPORT", "WALHALLA MUNI", "WALHALLA MUNICIPAL AIRPORT", "BLAIR MUNI AIRPORT", "9087044 - CALUMET IL", "MADISON MUNI", "MAPLE LAKE MUNICIPAL ARPT", "MERCER COUNTY REGIONAL AIRPORT", "MORA MUNICIPAL AIRPORT", "PINE RIVER REGIONAL AIRPORT", "PRINCETON MUNICIPAL AIRPORT", "RED OAK MUNICIPAL AIRPORT", "CANDO MUNI", "CANDO MUNICIPAL AIRPORT", "RUGBY MUNICIPAL AIRPORT", "ROLLA MUNI", "MENOMINEE", "GORDON MUNI", "MIDWEST NAT AIR CENTER AIRPORT", "DUPONT LAPEER AIRPORT", "FREMONT MUNI", "RUGBY MUNI", "FLETCHER FLD", "HANNIBAL RGNL", "HEREFORD MUNI", "MERCER CO RGNL", "RANGE OP 13 / YAKIMA TRAINING CENTER", "WOLCOTT IN.", "IDAHO COUNTY AIRPORT", "TULLAHOMA RGNL WM NORTHERN FLD", "UNIVERSITY OXFORD", "JESSE VIERTEL MEM")
+
+#The stations below do no return precipitation data.
+no_precip <- c("LEWISETTA VA", "AIKEN MUNI", "ALVA REGIONAL AIRPORT", "CLINTON REGIONAL AIRPORT", "CLEVELAND MUNICIPAL AIRPORT", "CHEASAPEAKE CITY", "DUPLIN COUNTY AIRPORT", "DELAWARE CITY", "COLUMBUS MUNICIPAL AIRPORT", "ENID WOODRING REGIONAL AIRPORT", "ESSEX CO AIRPORT", "EVERETT-STEWART AIRPORT", "FITZGERALD MUNICIPAL AIRPORT", "FITZGERALD MUNI", "FLETCHER FIELD AIRPORT", "FULTON CO", "GRIFFIN SPALDING COUNTY AIRPORT", "HAMMOND MUNICIPAL AIRPORT", "HANNIBAL REGIONAL AIRPORT", "HENRY CO", "HENRY TIFT MYERS AIRPORT", "JASPER COUNTY AIRPORT", "JOHN C TUNE", "KENNETT MEM", "LOGANSPORT CASS COUNTY AIRPORT", "DOUGLAS MUNICIPAL AIRPORT", "MARBLEHEAD", "MOULTRIE MUNICIPAL AIRPORT", "PITT-GREENVILLE AIRPORT", "POWELL MUNI", "RICKENBACKER INTL AIRPORT", "SIKESTON MEM MUNI", "SOUTHER FLD", "THOMASTON-UPSON CO AIRPORT", "TUNICA MUNICIPAL AIRPORT"," WASHINGTON REGIONAL AIRPORT", "WILLIAMSON COUNTY RGNL APT", "BUOY 44058 / STRINGRAY POINT", "KYLE OAKLEY FIELD AIRPORT", "LAGRANGE-CALLAWAY AIRPORT", "LEWISETTA VA", "ROSCOE TURNER AIRPORT", "SHIP JOHN SHOAL", "THOMASVILLE REGIONAL AIRPORT", "THOMAS P STAFFORD AIRPORT", "WARSAW MUNICIPAL AIRPORT", "WASHINGTON REGIONAL AIRPORT", "NORTHEASTERN REGIONAL ARPT", "HEART OF GEORGIA RGNL", "WINDER-BORROW AIRPORT", "HAZLEHURST", "HAZLEHURST AIRPORT", "WALTERBORO/LOWCOUNTRY RGNL", "SUMMERVILLE AIRPORT", "HOMERVILLE AIRPORT", "BISHOPS HEAD", "DE KALB COUNTY AIRPORT", "EARLY COUNTY AIRPORT", "HOMERVILLE", "REEDY POINT", "TULLAHOMA REGIONAL AIRPORT WILLIAM NORTHERN FIELD", "WAYCROSS-WARE CO. AIRPORT", "WEST BEND MUNICIPAL ARPT", "BRUNSWICK GOLDEN ISLES APT", "CAMBRIDGE DORCHESTER", "JESUP WAYNE CO", "UPPER CUMBERLAND REGIONAL AIRPORT", "WAUKESHA COUNTY AIRPORT", "CAMBRIDGE MD", "LAWRENCE J TIMMERMAN AIRPORT", "UPPER CUMBERLAND RGNL", "VIDALIA REGIONAL AIRPORT", "WINCHESTER MUNICIPAL AIRPORT", "CAMBRIDGE MD", "PORT WASHINGTON", "WINCHESTER MUNI", "CLAXTON EVANS COUNTY AIRPORT", "MADISON CO EXECUTIVE ARPT", "NEW CASTLE MUNICIPAL AIRPORT", "CAVALIER MUNI", "HEREFORD MUNICIPAL AIRPORT", "MANDAN MUNI")
+
+no_precip_1 <- c("MILWAUKEE", "EASTON/NEWNAM FIELD AIRPORT", "MADISONVILLE MUNICIPAL AIRPORT", "NEWNAN COWETA COUNTY ARPT", "LEWES", "DCATR CO INDUS AIRPK ARPT", "WARREN FIELD AIRPORT", "ELK CITY MUNICIPAL AP", "BUOY 44041 / JAMESTOWN", "CHESAPEAKE BAY", "CHESTER COUNTY GO CARLSON AIRPORT", "DUCK PIER", "GOLDSBORO-WAYNE MUNI ARPT", "MILLINGTON MUNICIPAL AIRPORT", "MONROE MUNICIPAL AIRPORT", "WEST GEORGIA RGNL O V GRAY FLD", "WEST WOODWARD AIRPORT", "JOHNSTON COUNTY AIRPORT", "PAULDING COUNTY AIRPORT", "ROCK COUNTY AIRPORT", "SHALTZ FIELD AIRPORT", "STARKE COUNTY AIRPORT", "WILLIAMSBURG-JAMESTOWN APT", "IOWA COUNTY AIRPORT", "COBB CO-MC COLLUM FLD ARPT", "LEWISETTA VA", "YORKTOWN VA", "CURRITUCK COUNTY AIRPORT", "KINSTON REGIONAL JETPORT AT STALLING FIELD", "SAMPSON COUNTY AIRPORT", "AMERADA PASS", "ANNAPOLIS", "BALDWIN COUNTY AIRPORT", "BAY BRIDGE AIRPORT", "BAYOU GAUCHE", "BELLEFONTAINE RGNL", "BLUEBIRD", "BRANCH COUNTY MEMO AIRPORT", "BROOKHAVEN LINCOLN COUNTY AIRPORT", "BUOY 44042 / POTOMAC", "BUOY 44062 / GROVES REEF", "BUOY 44063 / ANNAPOLIS", "BURLINGTON DEL RIVER", "BURNS HARBOR", "CAMBRIDGE MD", "CANTON/CHEROKEE ARPT", "CAPE HENRY", "CAPE LOOKOUT NC", "CHEYENNE CO MUNI", "CHICKASHA MUNICIPAL ARPT", "CHRIS CRUSTA MEMORIAL AIRPORT / ABBEVILLE", "CLARENCE E PAGE MUNICIPAL AIRPORT", "CLERMONT COUNTY AIRPORT", "CLINTON MUNICIPAL AIRPORT", "DARKE COUNTY AIRPORT", "DELAWARE MUNICIPAL JIM MOORE FIELD AIRPORT", "DOMINION TERMINAL ASSOCIATION", "ELKHART MUNICIPAL AIRPORT", "ELKHART-MORTON CO AIRPORT", "EMANUEL CO", "EMPORIA-GRENVLE RGNL ARPT", "FIRST LANDING", "FLEMING/MASON AIRPORT", "FRANKLIN COUNTY AIRPORT", "GREENE COUNTY REGIONAL AIRPORT", "HALIFAX NORTHAMPTON REGIONAL AIRPORT", "HALIFAX-NORTHAMPTON REGIONAL", "HARRELL FIELD AIRPORT", "HILLSDALE MUNICIPAL ARPT", "HOOK FIELD MUNICIPAL AIRPORT", "HREE RIVERS MUNICIPAL DR HAINES AIRPORT", "HURON LIGHT", "INDEPENDENCE MUNICIPAL AIRPORT", "JOHN BELL WILLIAMS AIRPORT", "JOHN MERCER PIER", "KEATON BEACH", "KEOKUK MUNICIPAL AIRPORT", "LAKE MARION", "LAKE MURRAY", "OREGON INLET", "COVE POINT")
+               
+#More stations do no return precipitation data.    
+no_precip_2 <- c("NEW CANAL", "NEWBERRY", "NEWBERRY COUNTY AIRPORT", "OCEAN CITY INLET", "OLD WOMEN CREEK", "OLNEY-NOBLE AIRPORT", "OREGON INLET MARINA", "OSCAR (ROY)", "OXFORD UNIV", "PAMPA M VISTA", "PERRYTON OCHILTREE CO ARPT", "PHILADELPHIA", "QUAKERTOWN AIRPORT", "S CRANEY ISLAND", "SALT POINT", "SANTEE COOPER REGIONAL AIRPORT", "SANTEE COOPER RGNL", "SHP - SHELL POINT FL", "SOLOMONS ISLAND", "SOMERSET-PULASKI CO-J.T. WILSON FIELD AIRPORT", "SOUTH BASS ISLAND OH", "STATESBORO-BULLOCK CO ARPT", "STEVENSVILLE", "STROM THURMOND DAM", "STUART POWELL FIELD AIRPORT", "STUART POWELL FLD", "SUMTER AIRPORT", "TESORO MARINE TERMINAL", "THOMAS POINT MD", "TOLCHESTER BEACH", "TOLEDO", "TOLEDO LIGHT 2", "UNIVERSITY OF OKLAHOMA WESTHEIMER AIRPORT", "VICKSBURG MUNICIPAL AIRPORT", "W ERIE 28NM NORTHWEST OF CLEVELAND OH", "W H `BUD` BARRON AIRPORT", "WASHINGTON-WILKES CO ARPT", "WILLOUGHBY DEGUASSING STATION", "WINGS FIELD AIRPORT", "YORK RIVER E RANGE", "CECIL FIELD AIRPORT", "CLINTON MEMORIAL AIRPORT", "CURTIS L BROWN JR FLD ARPT", "GOLF (SIMMS)", "HARNETT COUNTY AIRPORT", "HOUMA-TERREBONNE AIRPORT", "INDEPENDENT MUNICIPAL AIRPORT", "KEYSTONE AIRPARK", "LAKE WATEREE", "TOLEDO SUBURBAN AIRPORT", "FERNANDINA BEACH", "FERNANDINA BEACH MUNICIPAL AIRPORT", "MONCKS CORNER", "FERNANDINA BEACH MUNI", "HARTSVILLE REGIONAL AIRPORT", "WILLIAMSBURG REGIONAL AIRPORT", "LANCASTER CO MC WHIRTER FLD", "LAURENS COUNTY AIRPORT", "ATLANTIC CITY", "CHESTER CATAWBA REGIONAL AIRPORT", "CHEYENNE COUNTY MUNICIPAL AIRPORT", "FRANCIS SCOTT KEY BR", "MAYPORT", "LEWISETTA VA", "MARSHALL MEM MUNI", "MARTIN STATE AIRPORT", "MASON COUNTY AIRPORT", "MONEY POINT VA", "GEORGE R CARR MEM AIR FLD", "CHEASAPEAKE BRIDGE", "GARY/CHICAGO AIRPORT", "KIRSCH MUNICIPAL AIRPORT", "LITCHFIELD MUNICIPAL AIRPORT", "AIRLAKE AIRPORT", "ALBERT LEA MUNICIPAL ARPT", "GEORGE M BRYAN", "GEORGE M BRYAN AIRPORT", "MOOSE LAKE CARLTON CO ARPT", "PIPESTONE MUNICIPAL ARPT", "SCHENCK FIELD AIRPORT", "SHENANDOAH MUNICIPAL ARPT", "GEORGE M BRYAN", "YELLOWSTONE AIRPORT", "ORR REGIONAL AIRPORT")
+
+no_precip_3 <- c("ANOKA CO-BLNE AP(JNS FD) AP", "APPLETON MUNICIPAL AIRPORT", "ARTHUR N. NEU AIRPORT", "ATLANTIC MUNICIPAL AIRPORT", "AUDUBON COUNTY AIRPORT", "BARNES CO MUNI", "BEAVER COUNTY AIRPORT", "BEMIDJI-BELTRAMI CO ARPT", "BENSON MUNICIPAL AIRPORT", "BOONE MUNICIPAL AIRPORT", "CAMBRIDGE MUNICIPAL ARPT", "CAVALIER MUNICIPAL AIRPORT", "CHICAGO", "CLARION MUNICIPAL AIRPORT", "CLEVELAND", "CLINTONVILLE MUNICIPAL AIRPORT", "COUNCIL BLUFFS MUNI ARPT", "CRKSTN MUNI KRKWOD FLD APT", "CUMBERLAND MUNI", "CUYAHOGA COUNTY AIRPORT", "DENISON MUNICIPAL AIRPORT", "DETRT LKS-WETHING FLD ARPT", "DODGE CENTER ARPT", "FARIBAULT MUNICIPAL ARPT", "FERGUS FALLS MUNICIPAL AIRPORT-EINAR MICKELSON", "FOREST CITY MUNICIPAL AIRPORT", "FOSSTON MUNICIPAL AIRPORT", "GLEN ULLIN REGIONAL", "GLENWOOD MUNICIPAL AIRPORT", "GWINNER ROGER MELROE FLD", "HALLOCK MUNICIPAL AIRPORT", "HARLAN MUNICIPAL AIRPORT", "HARRY STERN AIRPORT", "INDEPENDENCE MUNICIPAL APT", "KEWAUNEE", "LITCHFIELD MUNICIPAL ARPT", "LITL FALS/MRSON CO-LNBRG FIELD AIRPORT", "MANDAN MUNICIPAL AIRPORT", "MDSON-LAC QUI PARLE CO APT", "MISSION", "MONTIVIDEO-CHIPPEWA CO APT", "MOORHEAD MUNICIPAL AIRPORT", "MORRIS MUNICIPAL AIRPORT", "NEW ULM MUNICIPAL AIRPORT", "OLIVIA REGIONAL AIRPORT", "ORTHONVILLE MUNI-MARTINSON FIELD AIRPORT", "OWATONNA DEGNER RGNL ARPT", "PERRY LEFORS FIELD AIRPORT", "ROSEAU MUNI/RUDY BILLBERG FLD ARPT", "SHEBOYGAN WI", "SOUTH BASS ISLAND OH", "STAPLES MUNICIPAL AIRPORT", "STORM LAKE MUNICIPAL ARPT", "W ERIE 28NM NORTHWEST OF CLEVELAND OH", "WADENA MUNICIPAL AIRPORT", "WASECA MUNICIPAL AIRPORT", "WEBSTER CITY MUNI AIRPORT", "WHEATON MUNICIPAL AIRPORT", "LE MARS MUNICIPAL AIRPORT", "SOUTH BASS ISLAND OH", "ST JAMES MUNICIPAL AIRPORT", "VINTON VETERANS MEMORIAL AIRPARK AIRPORT", "W ERIE 28NM NORTHWEST OF CLEVELAND OH", "WARROAD INTL-SWEDE CARLSON FLD ARPT", "WASKISH MUNICIPAL AIRPORT", "WILLMAR MUNICIPAL AIRPORT JOHN L RICE FIELD", "WINDOM MUNICIPAL AIRPORT", "CRESTON MUNICIPAL AIRPORT", "FERGUS FALLS MUNICIPAL AIRPORT-EINAR MICKELSON", "FLAG ISLAND", "LONGVILLE MUNICIPAL ARPT", "ORANGE CITY MUNICIPAL ARPT", "SHEBOYGAN WI", "SLAYTON MUNICIPAL AIRPORT", "W ERIE 28NM NORTHWEST OF CLEVELAND OH", "BIGFORK MUNICIPAL AIRPORT", "SHEBOYGAN WI", "SHELDON MUNICIPAL AIRPORT", "W ERIE 28NM NORTHWEST OF CLEVELAND OH", "FERGUS FALLS MUNICIPAL AIRPORT-EINAR MICKELSON FLD", "RAVENNA/PORTAGE COUNTY AIRPORT", "9087044 - CALUMET IL", "ATKN MUNI-S KURTZ FLD ARPT", "GRANITE FALLS MUNI ARPT/LENZEN-ROE MEMORIAL FIELD", "HEMPHILL COUNTY AIRPORT", "MOORE COUNTY AIRPORT")
+
+no_precip_4 <- c("9075014 - HARBOR BEACH MI", "ATKINSON MUNI", "BLACK HILLS CLYDE ICE FLD", "CENTERVILLE MUNI", "CHARITON MUNICIPAL AIRPORT", "GRATIOT COMMUNITY AIRPORT", "GROVE MUNICIPAL AIRPORT", "HURON COUNTY MEMORIAL AIRPORT", "KNOXVILLE MUNICIPAL ARPT", "MUSCATINE MUNICIPIAL ARPT", "NEWTON MUNICIPAL AIRPORT", "QUENTIN AANENSON FIELD AIRPORT", "SAGNAW CO H.W. BROWNE ARPT", "SHEBOYGAN WI", "TUSCOLA AREA AIRPORT", "WASHINGTON MUNICIPAL ARPT", "GRAVELLY SHOALS", "MONETT MUNI", "MONTICELLO REGIONAL ARPT", "S HURON 43NM EAST OF OSCODA MI", "ST CLAIR COUNTY INTL ARPT", "MORS MUNI-J.R. WSBRN FD AP", "OWOSSO COMMUNITY AIRPORT", "RICHLAND AIRPORT", "GROSSE ILE MUNICIPAL AIRPORT", "CENTRAL WISCONSIN AIRPORT", "MASON JEWETT FIELD AIRPORT", "NAMPA MUNICIPAL AIRPORT", "SCOTTSBORO MUNI WORD FLD", "STAN STAMPER MUNICIPAL AIRPORT", "STANLEY MUNI", "TIOGA MUNICIPAL AIRPORT", "FAIRFIELD MUNICIPAL ARPT", "TAWAS CITY GLOS WEATHER STATION", "WOLCOTT IN.")
+
+#removes the stations from the lists above
+stations <- stations[ !(stations$STATION.NAME %in% low_days), ]
+stations <- stations[ !(stations$STATION.NAME %in% low_days_1), ]
+stations <- stations[ !(stations$STATION.NAME %in% no_precip), ]
+stations <- stations[ !(stations$STATION.NAME %in% no_precip_1), ]
+stations <- stations[ !(stations$STATION.NAME %in% no_precip_2), ]
+stations <- stations[ !(stations$STATION.NAME %in% no_precip_3), ]
+stations <- stations[ !(stations$STATION.NAME %in% no_precip_4), ]
+
+
+#for some reasons there are some stations that will not remove with the code above so I can do it by the st_index number.
+
+#As of October 20, 2017 below numbers change over time this is not an ideal way of doing this work but as of this writing it is the only option I have found. 
+
+#9075014 - HARBOR BEACH MI = 2234
+#9087044 - CALUMET IL = 2618
+#CAMBRIDGE MD = 2533
+#FERGUS FALLS MUNICIPAL AIRPORT-EINAR MICKELSON FLD = 1927
+#LEWISETTA VA = 2538
+#SEWELLS POINT VA = 2318 
+#SHEBOYGAN WI = 2411
+#SHP - SHELL POINT FL = 2360
+#SOUTH BASS ISLAND OH = 2395
+#S HURON 43NM EAST OF OSCODA MI = 2324
+#MONEY POINT VA = 2539
+#THOMAS POINT MD = 2416
+#YORKTOWN VA = 2581
+#W ERIE 28NM NORTHWEST OF CLEVELAND OH = 2326
+#WOLCOTT IN. = 2157
+
+
+#List of stations by there row number that will are not removed by the code above. 
+hard_to_remove <- c(2240, 2618, 2533, 1927, 2538, 2318, 2411, 2360, 2395, 2324, 2573, 2416, 2581, 2309, 1925)
+
+#Remove the stations. 
+stations <- stations[ !(stations$st_index %in% hard_to_remove), ]
+
+######################################################################################
+
+
+
+#Now we have stations that return good data keep in mind there will be other stations agian this list was made only for stations that were near my locations mainly in the midwest.
+
+#rearrange the stations by the st_index number
+stations <- stations %>% arrange(st_index) 
+
+
+
+# Because the station data is only available for year we can remove the month and day from the begin and end fields. 
+stations$BEGIN <- as.numeric(substr(stations$BEGIN, 1, 4))
+stations$END <- as.numeric(substr(stations$END, 1, 4))
+
+
+length_st <- count(stations) %>%
+  as.numeric()
+length_loc <- count(locations) %>%
+  as.numeric()
+
+loc_index <- rep(1:length_loc, length_st)
+st_index <- rep(1:length_st, each=length_loc)
+
+#Makes new column with Lat. & Long. in radians for the Haversine math below. 
+locations <- locations %>% 
+  mutate(lat1 = (latitude*pi)/180) %>%  
+  mutate(lon1 = (longitude*pi)/180)
+
+stations <- stations %>% 
+  mutate(lat2 = (LAT * pi)/180) %>%
+  mutate(lon2 = (LON * pi)/180)
+
+#New data frame with both Answer Plots and weather stations data remove all but the 3 nearest weather stations to each Answer Plot and return nearness 1-3, distance in miles, lat and long of both Answer Plots and weather stations. 
+system.time(distances <- cbind(st_index, loc_index) %>%
+  as.data.frame() %>%
+  left_join(locations, by = "loc_index") %>%
+  left_join(stations, by = "st_index") %>%
+  mutate(a = sin((lat2-lat1)/2)^2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1)/2)^2) %>%
+  mutate(b = 2 * asin(sqrt(a))) %>%
+  mutate(distance = round((6371 * b)*0.6, digits = 2)) %>%
+  arrange(answerplot, distance) %>%
+  group_by(answerplot) %>%
+  arrange(answerplot) %>%
+  mutate(nearness = row_number()) %>%
+  filter(nearness <= 3) %>%
+  select(USAF, WBAN, STATION.NAME, answerplot, latitude, longitude, ICAO, STATE, LAT, LON, ELEV.M., distance, nearness, BEGIN, END, ICAO) %>%
+  ungroup %>%
+  as.data.frame()
+)
+#finds the quadrant for each station
+# distances = within(distances, {
+#   Quadrant_1 = ifelse(latitude < LAT & longitude < LON, 1, 0)
+#   Quadrant_2 = ifelse(latitude < LAT & longitude > LON, 2, 0)
+#   Quadrant_3 = ifelse(latitude > LAT & longitude > LON, 3, 0)
+#   Quadrant_4 = ifelse(latitude > LAT & longitude < LON, 4, 0)
+# })
+# 
+# #makes a new colu,mn quadrant with that tells what quadrant the point belongs in.
+# distances$Quadrant <- with(distances, Quadrant_1 + Quadrant_2 + Quadrant_3 + Quadrant_4)
+# 
+# #Returns 3 quadrants starting with the one labels nearness = 1 then moves to the nxt quadrant and so on.
+# distances <- distances %>%
+#   distinct(answerplot, Quadrant,.keep_all=T) %>%
+#   group_by(answerplot) %>%
+#   top_n(-3,nearness) %>%
+#   ungroup %>%
+#   as.data.frame()
+
+######################################################################################
+
+#Creates a new table that shows all of the files for the stations and returns a number for the download status. 0 means eveything downloaded ok.
+outputs <- as.data.frame(matrix(NA, dim(distances)[1], 2))
+names(outputs) <- c("FILE", "STATUS")
+
+#test to see if the NOAA ftp site is online
+url.test <-try(is.character(getURL("ftp://ftp.ncdc.noaa.gov/pub/data/gsod"))) == TRUE
+print(url.test)
+
+system.time(for (y in year) {
+  stations_downloaded <- distances[distances$BEGIN <= y & distances$END >= y, ]
+  for (s in 1:dim(stations_downloaded)[1]) {
+    outputs[s, 1] <- paste(sprintf("%06d", stations_downloaded[s,1]), "-", sprintf("%05d", stations_downloaded[s,2]), "-", y, ".op.gz", sep = "")
+    NOAA_Stations <- paste("wget -P data_download/NOAA_weather_data ftp://ftp.ncdc.noaa.gov/pub/data/gsod/", y, "/", outputs[s, 1], sep = "")
+    outputs[s, 2] <- try(system(NOAA_Stations, intern = FALSE, ignore.stderr = TRUE))
+  }
+})
+#show percent of outputs status that = 0 meaning they were downloaded without problems
+cat("Percent of data downloaded with code 0 meaning everything downloaded: ", sum(outputs$STATUS == 0)/nrow(outputs)*100,"%  Other codes can be found at https://winscp.net/eng/docs/sftp_codes")
+
+######################################################################################
+#unzips the file downloaded from NOAA
+system("gunzip -r data_download/NOAA_weather_data", intern = FALSE, ignore.stderr = TRUE)
+
+#points to where the station files were downloaded to and how the fixed width files are arranged. 
+NOAA_files2017 <- list.files("data_download/NOAA_weather_data")
+column.widths <- c(6, 6, 6, 2, 2, 8, 3, 8, 3, 8, 3, 8, 3, 7, 3, 7, 3, 7, 7, 8, 1, 7, 1, 6, 1, 7, 8)
+
+#The code below is run in PARALLEL meaning it runs on more then one core. 
+#prints the number of cores the computer has.
+no_cores <- detectCores()-1
+
+#Makes a cluster with the number of cores you want to use.
+cl <- makeCluster(no_cores, type="FORK")
+clusterExport(cl, "column.widths")
+
+#reads all of the downloaded files and brings in the data download for each station.
+system.time(Station_data <- do.call("rbind", 
+                              parLapply(cl, NOAA_files2017,
+                                  function(x) 
+                                     read.fwf(paste("data_download/NOAA_weather_data/", x, sep=''),  column.widths, skip = 1,
+                                        stringsAsFactors = FALSE))))
+
+#Always stop the cluster to free up the cores on the machine. 
+stopCluster(cl)
+
+######################################################################################
+
+#NOAA adds a number to instead of NA this code changes that.  
+Station_data[ Station_data == 9999.9 ] <- NA
+Station_data[ Station_data == 999.9 ] <- NA
+Station_data[ Station_data == 99.99 ] <- NA
+
+#keeps only the columns we need and drops the others. 
+Station_data <- Station_data[, c(1:6, 8, 14, 16, 18, 19, 20, 22, 24)]
+names(Station_data) <- c("STN---", "WBAN", "year", "month", "day", "Mean temp", "Mean dew point", "Mean visibility", "Mean wind speed", "Max sustained wind", "Max wind gust", "Max temp", "Min temp", "total precipitation")
+
+#Remove duplicate rows
+Station_data <- distinct(Station_data, `STN---`, WBAN, year, month, day, `Mean temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `Max temp`, `Min temp`, `total precipitation`) %>%
+unite(ID, c(`STN---`, WBAN), sep = "-", remove = FALSE)
+
+
+#Get only data for 2016
+Station_data <- Station_data %>%
+  filter(year == year) #%>%
+  #filter(month >= 04)
+
+# Merge the Y, M, D columns in to one for Date.
+Station_data$DATE <- as.Date(paste(Station_data$month, Station_data$day, Station_data$year, sep = "-"), format = "%m-%d-%Y")
+
+#Remove year, month, day to after adding the DATE column.
+Station_data <- Station_data[,-c(4:6)]
+
+#adds Id to the distances dataframe
+distances <- unite(distances, "ID", c(USAF, WBAN), sep = "-", remove = FALSE)
+ 
+# #join distances with station data. 
+Station_data <- full_join(distances, Station_data, by = "ID") 
+#Station_data_2015 <- full_join(distances, Station_data_2015, by = "ID")
+# 
+# #binds the rows for 2016 and 2017 together. 
+#Station_data <- rbind(Station_data_2016, Station_data_2015)
+
+#select only the data that is needed for the download and join
+Station_data <- Station_data %>% select(ID, station_name = STATION.NAME, answerplot, longitude, latitude, station_state = STATE, station_lat = LAT, station_long = LON, distance, nearness, DATE, `Mean temp`, `Max temp`, `Min temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `total precipitation`) %>%
+  group_by(answerplot) %>%
+  ungroup() %>%
+  as.data.frame()
+
+#Code below deletes all of the files that were downloaded for the weather stations, All the weather data in the .co.gz files. This is done because if you need to run the code again not deleting the files makes means that the code will have to read them all again and slow down the process. Without the above code to remove duplicets if the old files were not removed station data would be added many times.n 
+files.to.delete <- dir("/Users/jeffkropelnicki/Desktop/Winfield files/Weather data and code/NOAA code/data_download/NOAA_weather_data",pattern=".op",recursive=T,full.names=T)
+invisible(file.remove(files.to.delete))
+
+write.csv(Station_data, "/Users/jeffkropelnicki/Desktop/test.csv")
+
+```
+
+

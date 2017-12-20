@@ -28,7 +28,7 @@ library(lubridate) #Work with dates
 #Add a file path that has a list of locations with a name, latitude and longitude for each. 
 test_stations <- ""
 
-#Add the year you would like weather data for. 
+#Add the year you would like weather data for here I code it with one year but code can be added to return a final table with more then one year.
 year <- "2017"
 
 #This reads in the data and names it locations. 
@@ -121,8 +121,6 @@ stations <- stations[ !(stations$st_index %in% hard_to_remove), ]
 #rearrange the stations by the st_index number
 stations <- stations %>% arrange(st_index) 
 
-
-
 # Because the station data is only available for year we can remove the month and day from the begin and end fields. 
 stations$BEGIN <- as.numeric(substr(stations$BEGIN, 1, 4))
 stations$END <- as.numeric(substr(stations$END, 1, 4))
@@ -136,7 +134,11 @@ length_loc <- count(locations) %>%
 loc_index <- rep(1:length_loc, length_st)
 st_index <- rep(1:length_st, each=length_loc)
 
-#Makes new column with Lat. & Long. in radians for the Haversine math below. 
+
+#I want to know the distace in miles each stations is from my locations for this I will use Haversine distance. 
+
+#Makes new column with Lat. & Long. in radians for the Haversine math below. This will beremoved be the code soon after. 
+
 locations <- locations %>% 
   mutate(lat1 = (latitude*pi)/180) %>%  
   mutate(lon1 = (longitude*pi)/180)
@@ -145,7 +147,7 @@ stations <- stations %>%
   mutate(lat2 = (LAT * pi)/180) %>%
   mutate(lon2 = (LON * pi)/180)
 
-#New data frame with both Answer Plots and weather stations data remove all but the 3 nearest weather stations to each Answer Plot and return nearness 1-3, distance in miles, lat and long of both Answer Plots and weather stations. 
+#New data frame with both Answer Plots and weather stations data remove all but the 15 nearest weather stations to each location and return nearness 1-15, distance in miles, latatude and longitude of both our locations and the weather stations. 
 system.time(distances <- cbind(st_index, loc_index) %>%
   as.data.frame() %>%
   left_join(locations, by = "loc_index") %>%
@@ -157,29 +159,30 @@ system.time(distances <- cbind(st_index, loc_index) %>%
   group_by(answerplot) %>%
   arrange(answerplot) %>%
   mutate(nearness = row_number()) %>%
-  filter(nearness <= 3) %>%
+  filter(nearness <= 15) %>%
   select(USAF, WBAN, STATION.NAME, answerplot, latitude, longitude, ICAO, STATE, LAT, LON, ELEV.M., distance, nearness, BEGIN, END, ICAO) %>%
   ungroup %>%
   as.data.frame()
 )
+
 #finds the quadrant for each station
-# distances = within(distances, {
-#   Quadrant_1 = ifelse(latitude < LAT & longitude < LON, 1, 0)
-#   Quadrant_2 = ifelse(latitude < LAT & longitude > LON, 2, 0)
-#   Quadrant_3 = ifelse(latitude > LAT & longitude > LON, 3, 0)
-#   Quadrant_4 = ifelse(latitude > LAT & longitude < LON, 4, 0)
-# })
-# 
-# #makes a new colu,mn quadrant with that tells what quadrant the point belongs in.
-# distances$Quadrant <- with(distances, Quadrant_1 + Quadrant_2 + Quadrant_3 + Quadrant_4)
-# 
-# #Returns 3 quadrants starting with the one labels nearness = 1 then moves to the nxt quadrant and so on.
-# distances <- distances %>%
-#   distinct(answerplot, Quadrant,.keep_all=T) %>%
-#   group_by(answerplot) %>%
-#   top_n(-3,nearness) %>%
-#   ungroup %>%
-#   as.data.frame()
+distances = within(distances, {
+  Quadrant_1 = ifelse(latitude < LAT & longitude < LON, 1, 0)
+  Quadrant_2 = ifelse(latitude < LAT & longitude > LON, 2, 0)
+  Quadrant_3 = ifelse(latitude > LAT & longitude > LON, 3, 0)
+  Quadrant_4 = ifelse(latitude > LAT & longitude < LON, 4, 0)
+})
+
+#makes a new column quadrant with that tells what quadrant the station belongs in.
+distances$Quadrant <- with(distances, Quadrant_1 + Quadrant_2 + Quadrant_3 + Quadrant_4)
+
+#Returns 4 quadrants starting with the one labels nearness = 1 then moves to the next quadrant and so on.
+distances <- distances %>%
+  distinct(answerplot, Quadrant,.keep_all=T) %>%
+  group_by(answerplot) %>%
+  top_n(-4,nearness) %>%
+  ungroup %>%
+  as.data.frame()
 
 ######################################################################################
 
@@ -191,14 +194,17 @@ names(outputs) <- c("FILE", "STATUS")
 url.test <-try(is.character(getURL("ftp://ftp.ncdc.noaa.gov/pub/data/gsod"))) == TRUE
 print(url.test)
 
+#Download the data.
 system.time(for (y in year) {
   stations_downloaded <- distances[distances$BEGIN <= y & distances$END >= y, ]
   for (s in 1:dim(stations_downloaded)[1]) {
-    outputs[s, 1] <- paste(sprintf("%06d", stations_downloaded[s,1]), "-", sprintf("%05d", stations_downloaded[s,2]), "-", y, ".op.gz", sep = "")
-    NOAA_Stations <- paste("wget -P data_download/NOAA_weather_data ftp://ftp.ncdc.noaa.gov/pub/data/gsod/", y, "/", outputs[s, 1], sep = "")
+    outputs[s, 1] <- paste(sprintf("%06d", stations_downloaded[s,1]), "-", sprintf("%05d", fmt =                     stations_downloaded[s,2]), "-", y, ".op.gz", sep = "")
+    NOAA_Stations <- paste("wget -P data_download/NOAA_weather_data ftp://ftp.ncdc.noaa.gov/pub/data/gsod/",         y, "/", outputs[s, 1], sep = "")
     outputs[s, 2] <- try(system(NOAA_Stations, intern = FALSE, ignore.stderr = TRUE))
   }
 })
+
+
 #show percent of outputs status that = 0 meaning they were downloaded without problems
 cat("Percent of data downloaded with code 0 meaning everything downloaded: ", sum(outputs$STATUS == 0)/nrow(outputs)*100,"%  Other codes can be found at https://winscp.net/eng/docs/sftp_codes")
 
@@ -211,7 +217,7 @@ NOAA_files2017 <- list.files("data_download/NOAA_weather_data")
 column.widths <- c(6, 6, 6, 2, 2, 8, 3, 8, 3, 8, 3, 8, 3, 7, 3, 7, 3, 7, 7, 8, 1, 7, 1, 6, 1, 7, 8)
 
 #The code below is run in PARALLEL meaning it runs on more then one core. 
-#prints the number of cores the computer has.
+#Here I am saying run of number of cores -1 
 no_cores <- detectCores()-1
 
 #Makes a cluster with the number of cores you want to use.
@@ -222,7 +228,7 @@ clusterExport(cl, "column.widths")
 system.time(Station_data <- do.call("rbind", 
                               parLapply(cl, NOAA_files2017,
                                   function(x) 
-                                     read.fwf(paste("data_download/NOAA_weather_data/", x, sep=''),  column.widths, skip = 1,
+                                     read.fwf(paste("data_download/NOAA_weather_data/", x, sep=''),                                                  column.widths, skip = 1,
                                         stringsAsFactors = FALSE))))
 
 #Always stop the cluster to free up the cores on the machine. 
@@ -244,7 +250,7 @@ Station_data <- distinct(Station_data, `STN---`, WBAN, year, month, day, `Mean t
 unite(ID, c(`STN---`, WBAN), sep = "-", remove = FALSE)
 
 
-#Get only data for 2016
+#Get only data for the year you added above. 
 Station_data <- Station_data %>%
   filter(year == year) #%>%
   #filter(month >= 04)
@@ -258,12 +264,9 @@ Station_data <- Station_data[,-c(4:6)]
 #adds Id to the distances dataframe
 distances <- unite(distances, "ID", c(USAF, WBAN), sep = "-", remove = FALSE)
  
-# #join distances with station data. 
+#join distances with station data. 
 Station_data <- full_join(distances, Station_data, by = "ID") 
-#Station_data_2015 <- full_join(distances, Station_data_2015, by = "ID")
-# 
-# #binds the rows for 2016 and 2017 together. 
-#Station_data <- rbind(Station_data_2016, Station_data_2015)
+
 
 #select only the data that is needed for the download and join
 Station_data <- Station_data %>% select(ID, station_name = STATION.NAME, answerplot, longitude, latitude, station_state = STATE, station_lat = LAT, station_long = LON, distance, nearness, DATE, `Mean temp`, `Max temp`, `Min temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `total precipitation`) %>%

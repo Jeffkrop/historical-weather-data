@@ -1,30 +1,23 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document: default
+  html_notebook: default
 ---
 
-Below is code that will allow the user to feed in a list of locations they would like retrieve weather data for. The code below will find the 3 weather stations that are nearest the locations given. The three stations will be in 3 different quadrants. I wanted different quadrants because I did not want groups stations I want to get a better understanding of the weather around a location. 
+Below is code that will allow the user to feed in a list of locations they would like retrieve weather data for. The code below will find the four weather stations that are nearest the locations given. The four stations will be in four different quadrants. I wanted different quadrants because I did not want grouped stations I want to get a better understanding of the weather around a location. 
 
-The finished table be a dataframe with Station name, location name, location latitude, location longitude, station latitude, station longitude, distace in mils the station is from the location, data Mean temp, Max temp, Min temp, Mean dew point, Mean visibility, Mean wind speed, Max sustained wind, Max wind gust, total precipitation
-```{r}
+The finished table be a data frame with Station name, location name, location latitude, location longitude, station latitude, station longitude, distance in mils the station is from the location, data Mean temp, Max temp, Min temp, Mean dew point, Mean visibility, Mean wind speed, Max sustained wind, Max wind gust, total precipitation
+```{r, warning=FALSE, message=FALSE}
 #Packages need for this code. 
-
 library(tidyverse)
-#library(sp) # for plotting data as maps
-#library(knitr) #dynamic report generation
 library(parallel) #Working with multiple cores on cpu
-#library(ggmap) #Visualize spatial data
 library(lubridate) #Work with dates
-#library(gstat) #Spatial Geostatistical Modelling, Prediction and Simulation
-#library(FedData) #Used to get ssurgo data
-#library(rgdal) #Used to read in shapefiles
-#library(maptools) #Used to save the shapefile to disk
-#library(RCurl) #Used to get url.
+library(RCurl) #Used to get url.
 ```   
    
       
-```{r}
-
+```{r, warning=FALSE, message=FALSE}
 #Add a file path that has a list of locations with a columns named (name latitude longitude) for each. 
 test_stations <- ""
 
@@ -198,7 +191,7 @@ print(url.test)
 system.time(for (y in year) {
   stations_downloaded <- distances[distances$BEGIN <= y & distances$END >= y, ]
   for (s in 1:dim(stations_downloaded)[1]) {
-    outputs[s, 1] <- paste(sprintf("%06d", stations_downloaded[s,1]), "-", sprintf("%05d", fmt =                     stations_downloaded[s,2]), "-", y, ".op.gz", sep = "")
+    outputs[s, 1] <- paste(sprintf("%06d", stations_downloaded[s,1]), "-", sprintf("%05d",                        stations_downloaded[s,2]), "-", y, ".op.gz", sep = "")
     NOAA_Stations <- paste("wget -P data_download/NOAA_weather_data ftp://ftp.ncdc.noaa.gov/pub/data/gsod/",         y, "/", outputs[s, 1], sep = "")
     outputs[s, 2] <- try(system(NOAA_Stations, intern = FALSE, ignore.stderr = TRUE))
   }
@@ -270,16 +263,19 @@ Station_data <- full_join(distances, Station_data, by = "ID")
 
 #This is the final table with colums named as we would like them. 
 Station_data <- Station_data %>% select(ID, station_name = STATION.NAME, name, longitude, latitude, station_state = STATE, station_lat = LAT, station_long = LON, distance, nearness, DATE, `Mean temp`, `Max temp`, `Min temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `total precipitation`) %>%
-  group_by(answerplot) %>%
+  group_by(name) %>%
   ungroup() %>%
   as.data.frame()
 
 #Code below deletes all of the files that were downloaded for the weather stations, All the weather data in the .co.gz files. This is done because if you need to run the code again not deleting the files makes means that the code will have to read them all again and slow down the process. Without the above code to remove duplicets if the old files were not removed station data would be added many times.n 
-files.to.delete <- dir("data_download/NOAA_weather_data/",pattern=".op",recursive=T,full.names=T)
+files.to.delete <- dir("data_download/NOAA_weather_data",pattern=".op",recursive=T,full.names=T)
 invisible(file.remove(files.to.delete))
 
-write.csv(Station_data, "/test.csv")
+
 
 ```
+
+
+
 
 

@@ -26,7 +26,7 @@ library(lubridate) #Work with dates
 ```{r}
 
 #Add a file path that has a list of locations with a name, latitude and longitude for each. 
-test_stations <- "/Users/jeffkropelnicki/Desktop/Winfield files/weather requests/weather for john/Jeff_Only1recrodperAnswer.csv"
+test_stations <- ""
 
 #Add the year you would like weather data for. 
 year <- "2017"
@@ -272,10 +272,10 @@ Station_data <- Station_data %>% select(ID, station_name = STATION.NAME, answerp
   as.data.frame()
 
 #Code below deletes all of the files that were downloaded for the weather stations, All the weather data in the .co.gz files. This is done because if you need to run the code again not deleting the files makes means that the code will have to read them all again and slow down the process. Without the above code to remove duplicets if the old files were not removed station data would be added many times.n 
-files.to.delete <- dir("/Users/jeffkropelnicki/Desktop/Winfield files/Weather data and code/NOAA code/data_download/NOAA_weather_data",pattern=".op",recursive=T,full.names=T)
+files.to.delete <- dir("",pattern=".op",recursive=T,full.names=T)
 invisible(file.remove(files.to.delete))
 
-write.csv(Station_data, "/Users/jeffkropelnicki/Desktop/test.csv")
+write.csv(Station_data, "/test.csv")
 
 ```
 

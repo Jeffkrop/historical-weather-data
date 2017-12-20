@@ -5,7 +5,7 @@ output: html_notebook
 
 Below is code that will allow the user to feed in a list of locations they would like retrieve weather data for. The code below will find the 3 weather stations that are nearest the locations given. The three stations will be in 3 different quadrants. I wanted different quadrants because I did not want groups stations I want to get a better understanding of the weather around a location. 
 
-The finished list will return a data frame
+The finished table be a dataframe with Station name, location name, location latitude, location longitude, station latitude, station longitude, distace in mils the station is from the location, data Mean temp, Max temp, Min temp, Mean dew point, Mean visibility, Mean wind speed, Max sustained wind, Max wind gust, total precipitation
 ```{r}
 #Packages need for this code. 
 
@@ -25,7 +25,7 @@ library(lubridate) #Work with dates
       
 ```{r}
 
-#Add a file path that has a list of locations with a name, latitude and longitude for each. 
+#Add a file path that has a list of locations with a columns named (name latitude longitude) for each. 
 test_stations <- ""
 
 #Add the year you would like weather data for here I code it with one year but code can be added to return a final table with more then one year.
@@ -155,12 +155,12 @@ system.time(distances <- cbind(st_index, loc_index) %>%
   mutate(a = sin((lat2-lat1)/2)^2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1)/2)^2) %>%
   mutate(b = 2 * asin(sqrt(a))) %>%
   mutate(distance = round((6371 * b)*0.6, digits = 2)) %>%
-  arrange(answerplot, distance) %>%
-  group_by(answerplot) %>%
-  arrange(answerplot) %>%
+  arrange(name, distance) %>%
+  group_by(name) %>%
+  arrange(name) %>%
   mutate(nearness = row_number()) %>%
   filter(nearness <= 15) %>%
-  select(USAF, WBAN, STATION.NAME, answerplot, latitude, longitude, ICAO, STATE, LAT, LON, ELEV.M., distance, nearness, BEGIN, END, ICAO) %>%
+  select(USAF, WBAN, STATION.NAME, name, latitude, longitude, ICAO, STATE, LAT, LON, ELEV.M., distance, nearness, BEGIN, END, ICAO) %>%
   ungroup %>%
   as.data.frame()
 )
@@ -178,8 +178,8 @@ distances$Quadrant <- with(distances, Quadrant_1 + Quadrant_2 + Quadrant_3 + Qua
 
 #Returns 4 quadrants starting with the one labels nearness = 1 then moves to the next quadrant and so on.
 distances <- distances %>%
-  distinct(answerplot, Quadrant,.keep_all=T) %>%
-  group_by(answerplot) %>%
+  distinct(name, Quadrant,.keep_all=T) %>%
+  group_by(name) %>%
   top_n(-4,nearness) %>%
   ungroup %>%
   as.data.frame()
@@ -268,14 +268,14 @@ distances <- unite(distances, "ID", c(USAF, WBAN), sep = "-", remove = FALSE)
 Station_data <- full_join(distances, Station_data, by = "ID") 
 
 
-#select only the data that is needed for the download and join
-Station_data <- Station_data %>% select(ID, station_name = STATION.NAME, answerplot, longitude, latitude, station_state = STATE, station_lat = LAT, station_long = LON, distance, nearness, DATE, `Mean temp`, `Max temp`, `Min temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `total precipitation`) %>%
+#This is the final table with colums named as we would like them. 
+Station_data <- Station_data %>% select(ID, station_name = STATION.NAME, name, longitude, latitude, station_state = STATE, station_lat = LAT, station_long = LON, distance, nearness, DATE, `Mean temp`, `Max temp`, `Min temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `total precipitation`) %>%
   group_by(answerplot) %>%
   ungroup() %>%
   as.data.frame()
 
 #Code below deletes all of the files that were downloaded for the weather stations, All the weather data in the .co.gz files. This is done because if you need to run the code again not deleting the files makes means that the code will have to read them all again and slow down the process. Without the above code to remove duplicets if the old files were not removed station data would be added many times.n 
-files.to.delete <- dir("",pattern=".op",recursive=T,full.names=T)
+files.to.delete <- dir("data_download/NOAA_weather_data/",pattern=".op",recursive=T,full.names=T)
 invisible(file.remove(files.to.delete))
 
 write.csv(Station_data, "/test.csv")

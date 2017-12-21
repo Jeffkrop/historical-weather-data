@@ -338,7 +338,7 @@ t4 <- Station_data %>% filter(name == "Tubbs Fire" & month == 9 & day >= 8 & day
 
 
 plot(t4$year, t4$`Max temp`)
-t
+
 ```
 
 

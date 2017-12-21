@@ -21,6 +21,7 @@ library(kableExtra)
 library(parallel) #Working with multiple cores on cpu
 library(lubridate) #Work with dates
 library(RCurl) #Used to get url.
+library(ggmap) #Visualize spatial data
 ```
 
 ```{r, warning=FALSE, message=FALSE, echo = FALSE}
@@ -39,8 +40,8 @@ Here I download the weather data from NOAA using the code shown in the Weather_c
 test_stations <- "fires.csv"
 
 #Add the year you would like weather data for here I code it with one year but code can be added to return a final table with more then one year.
-year <- "2017"
-
+year1 <- "2017"
+year2 <- "2000"
 #This reads in the data and names it locations. 
 locations <- read.csv(test_stations, stringsAsFactors = FALSE) %>%
   mutate(loc_index=row_number())
@@ -59,7 +60,7 @@ repeat{
 #Create data frame of weather stations that are in the United States and were in operation between the years 2014 and 2017
 stations <- read.csv("isd-history.csv") %>%
   filter(CTRY=="US") %>%
-  filter(BEGIN <= 20140101 & END >=20171201) %>%
+  filter(BEGIN <= 20000101 & END >=20171201) %>%
   mutate(st_index=row_number()) %>%
   arrange(STATION.NAME)
 
@@ -201,7 +202,7 @@ outputs <- as.data.frame(matrix(NA, dim(distances)[1], 2))
 names(outputs) <- c("FILE", "STATUS")
 
 #Download the data.
-for (y in year) {
+for (y in year2:year1) {
   stations_downloaded <- distances[distances$BEGIN <= y & distances$END >= y, ]
   for (s in 1:dim(stations_downloaded)[1]) {
     outputs[s, 1] <- paste(sprintf("%06d", stations_downloaded[s,1]), "-", sprintf("%05d",                        stations_downloaded[s,2]), "-", y, ".op.gz", sep = "")
@@ -256,14 +257,14 @@ unite(ID, c(`STN---`, WBAN), sep = "-", remove = FALSE)
 
 #Get only data for the year you added above. 
 Station_data <- Station_data %>%
-  filter(year == year) %>%
+  #filter(year == year) %>%
   filter(month >= 09)
 
 # Merge the Y, M, D columns in to one for Date.
 Station_data$DATE <- as.Date(paste(Station_data$month, Station_data$day, Station_data$year, sep = "-"), format = "%m-%d-%Y")
 
 #Remove year, month, day to after adding the DATE column.
-Station_data <- Station_data[,-c(4:6)]
+#Station_data <- Station_data[,-c(4:6)]
 
 #adds Id to the distances dataframe
 distances <- unite(distances, "ID", c(USAF, WBAN), sep = "-", remove = FALSE)
@@ -273,7 +274,7 @@ Station_data <- full_join(distances, Station_data, by = "ID")
 
 
 #This is the final table with colums named as we would like them. 
-Station_data <- Station_data %>% select(ID, station_name = STATION.NAME, name, longitude, latitude, station_state = STATE, station_lat = LAT, station_long = LON, distance, nearness, DATE, `Mean temp`, `Max temp`, `Min temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `total precipitation`) %>%
+Station_data <- Station_data %>% select(year, month, day, station_name = STATION.NAME, name, longitude, latitude, station_state = STATE, station_lat = LAT, station_long = LON, distance, nearness, DATE, `Mean temp`, `Max temp`, `Min temp`, `Mean dew point`, `Mean visibility`, `Mean wind speed`, `Max sustained wind`, `Max wind gust`, `total precipitation`) %>%
   group_by(name) %>%
   ungroup() %>%
   as.data.frame()
@@ -291,17 +292,54 @@ t0 <- Station_data %>% group_by(station_name) %>% summarise(`Days with data` = n
 
 kable(t0, "html")%>%
   kable_styling(full_width = F, position = "left")
-
 ```
 
    
 The stations that are nearest the locations where the two wildfires stated are
 ```{r, warning=FALSE, message=FALSE, , echo=FALSE}
-t2 <- stations_downloaded %>% select(`station name` = STATION.NAME, distance)
+t2 <- stations_downloaded %>% select(name, `station name` = STATION.NAME, distance)
 
 kable(t2, "html")%>%
   kable_styling(full_width = F, position = "left")
 ```
+
+Looking at the distance it may help to see a map of where the fire is and where the stations are. 
+```{r, warning=FALSE, message=FALSE, , echo=FALSE}
+map <- get_map(location = c(-120.913278, 36.736777), zoom = 7)
+ggmap(map) +
+  geom_point(
+    data = Station_data, aes(station_long, station_lat), color = "green", size = 4) +
+  geom_point(
+    data = Station_data, aes(longitude, latitude), color = "red", size = 4)
+```   
+
+Green points are the location of the weather stations and the red points are the locations of the fires.    
+   
+I would like to see the weather from all four stations around the Tubbs Fire for the week the fires stated 09-08-2017 to 09-15-2017
+```{r}
+t3 <- Station_data %>% filter(name == "Tubbs Fire" & DATE >= "2017-09-08" & DATE <= "2017-09-15") %>%
+                       select(name, station_name, DATE, `Mean temp`, `Max temp`, 
+                              `Min temp`, `Mean dew point`, `Mean wind speed`, `Max sustained wind`, 
+                              `Max wind gust`, `total precipitation`) %>% 
+                       arrange(DATE)
+
+kable(t3, "html")%>%
+  kable_styling(full_width = F, position = "left")
+```
+
+ 
+Now we can see the same week but for years 2010 to 2017   
+```{r}
+t4 <- Station_data %>% filter(name == "Tubbs Fire" & month == 9 & day >= 8 & day <= 15) %>%
+                       select(year, name, station_name, DATE, `Mean temp`, `Max temp`, 
+                              `Min temp`, `Mean dew point`, `Mean wind speed`, `Max sustained wind`, 
+                              `Max wind gust`, `total precipitation`) %>% 
+                       arrange(DATE)
+
+
+plot(t4$year, t4$`Max temp`)
+```
+
 
 
 
